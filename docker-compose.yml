@@ -1,0 +1,113 @@
+name: dine-sync
+
+services:
+    # ──────────────────────────────────────────────────────────────
+    # INFRASTRUCTURE
+    # ──────────────────────────────────────────────────────────────
+
+    postgres-auth:
+        image: postgres:16-alpine
+        container_name: ds-postgres-auth
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: auth_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_auth_data:/var/lib/postgresql/data
+        ports:
+            - "5432:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d auth_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    redis:
+        image: redis:7-alpine
+        container_name: ds-redis
+        restart: unless-stopped
+        command: redis-server --appendonly yes
+        volumes:
+            - redis_data:/data
+        ports:
+            - "6379:6379"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # ──────────────────────────────────────────────────────────────
+    # SERVICES
+    # ──────────────────────────────────────────────────────────────
+
+    api-gateway:
+        build:
+            context: ./api-gateway
+            dockerfile: Dockerfile
+        container_name: ds-api-gateway
+        restart: unless-stopped
+        depends_on:
+            redis:
+                condition: service_healthy
+        env_file: ./api-gateway/.env
+        environment:
+            PORT: 8000
+            NODE_ENV: development
+            REDIS_HOST: redis
+            REDIS_PORT: 6379
+            AUTH_SERVICE_URL: http://auth-service:8001
+        ports:
+            - "8000:8000"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
+    auth-service:
+        build:
+            context: ./services/auth-service
+            dockerfile: Dockerfile
+        container_name: ds-auth-service
+        restart: unless-stopped
+        depends_on:
+            postgres-auth:
+                condition: service_healthy
+        env_file: ./services/auth-service/.env
+        environment:
+            PORT: 8001
+            NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-auth:5432/auth_db
+        ports:
+            - "8001:8001"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
+# ──────────────────────────────────────────────────────────────────
+# VOLUMES
+# ──────────────────────────────────────────────────────────────────
+
+volumes:
+    postgres_auth_data:
+    redis_data:
+
+# ──────────────────────────────────────────────────────────────────
+# NETWORKS
+# ──────────────────────────────────────────────────────────────────
+
+networks:
+    dine-sync-net:
+        driver: bridge

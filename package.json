@@ -1,0 +1,43 @@
+{
+    "name": "dine-sync",
+    "version": "1.0.0",
+    "description": "QR-based smart restaurant ordering platform — microservices monorepo",
+    "private": true,
+    "type": "module",
+    "workspaces": [
+        "api-gateway",
+        "services/*",
+        "shared"
+    ],
+    "scripts": {
+        "dev:gateway": "npm run dev --workspace=api-gateway",
+        "dev:auth": "npm run dev --workspace=services/auth-service",
+        "dev:restaurant": "npm run dev --workspace=services/restaurant-service",
+        "dev:menu": "npm run dev --workspace=services/menu-service",
+        "dev:order": "npm run dev --workspace=services/order-service",
+        "dev:kitchen": "npm run dev --workspace=services/kitchen-queue-service",
+        "dev:payment": "npm run dev --workspace=services/payment-service",
+        "dev:inventory": "npm run dev --workspace=services/inventory-service",
+        "dev:notification": "npm run dev --workspace=services/notification-service",
+        "build": "docker compose build",
+        "up": "docker compose up -d",
+        "down": "docker compose down",
+        "down:clean": "docker compose down -v",
+        "logs": "docker compose logs -f",
+        "logs:gateway": "docker compose logs -f api-gateway",
+        "lint": "npm run lint --workspaces --if-present",
+        "test": "npm run test --workspaces --if-present",
+        "format": "prettier . --write",
+        "format:check": "prettier . --check",
+        "install:all": "npm install --workspaces"
+    },
+    "engines": {
+        "node": ">=20.0.0",
+        "npm": ">=10.0.0"
+    },
+    "author": "Rupankar Das <rupankardasofficial@gmail.com>",
+    "license": "MIT",
+    "devDependencies": {
+        "prettier": "^3.8.3"
+    }
+}
