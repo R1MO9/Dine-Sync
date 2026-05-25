@@ -25,6 +25,26 @@ services:
             timeout: 5s
             retries: 5
 
+    postgres-restaurant:
+        image: postgres:16-alpine
+        container_name: ds-postgres-restaurant
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: restaurant_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_restaurant_data:/var/lib/postgresql/data
+        ports:
+            - "5433:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d restaurant_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
     redis:
         image: redis:7-alpine
         container_name: ds-redis
@@ -62,6 +82,7 @@ services:
             REDIS_HOST: redis
             REDIS_PORT: 6379
             AUTH_SERVICE_URL: http://auth-service:8001
+            RESTAURANT_SERVICE_URL: http://restaurant-service:8002
         ports:
             - "8000:8000"
         networks:
@@ -96,12 +117,37 @@ services:
             timeout: 5s
             retries: 3
 
+    restaurant-service:
+        build:
+            context: ./services/restaurant-service
+            dockerfile: Dockerfile
+        container_name: ds-restaurant-service
+        restart: unless-stopped
+        depends_on:
+            postgres-restaurant:
+                condition: service_healthy
+        env_file: ./services/restaurant-service/.env
+        environment:
+            PORT: 8002
+            NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-restaurant:5432/restaurant_db
+        ports:
+            - "8002:8002"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8002/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
 # ──────────────────────────────────────────────────────────────────
 # VOLUMES
 # ──────────────────────────────────────────────────────────────────
 
 volumes:
     postgres_auth_data:
+    postgres_restaurant_data:
     redis_data:
 
 # ──────────────────────────────────────────────────────────────────

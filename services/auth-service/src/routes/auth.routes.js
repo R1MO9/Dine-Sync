@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { register, login, logout, refreshToken, getMe } from "../controllers/auth.controller.js";
+import {
+    register,
+    login,
+    logout,
+    refreshToken,
+    getMe,
+    getByUserId,
+} from "../controllers/auth.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validate.js";
 import { registerSchema, loginSchema, refreshTokenSchema } from "../validations/auth.schema.js";
@@ -24,5 +31,8 @@ router.get("/me", authenticate, getMe);
 
 // POST /api/v1/auth/logout
 router.post("/logout", authenticate, logout);
+
+// Internal route — called by other services only
+router.get("/internal/user/:userId", getByUserId);
 
 export default router;

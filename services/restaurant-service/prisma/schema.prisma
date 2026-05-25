@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionPlan {
+  free
+  starter
+  growth
+  enterprise
+}
+
+enum StaffRole {
+  floor_manager
+  chef
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  expired
+}
+
+model Restaurant {
+  id          String           @id @default(uuid())
+  name        String
+  subdomain   String           @unique
+  ownerId     String
+  address     String?
+  phone       String?
+  logoUrl     String?
+  plan        SubscriptionPlan @default(free)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  tables  Table[]
+  staff   Staff[]
+  invites StaffInvite[]
+
+  @@map("restaurants")
+}
+
+model Table {
+  id           String   @id @default(uuid())
+  restaurantId String
+  number       Int
+  label        String?
+  qrCodeUrl    String?
+  qrToken      String   @unique
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, number])
+  @@map("tables")
+}
+
+model Staff {
+  id           String    @id @default(uuid())
+  restaurantId String
+  userId       String
+  role         StaffRole
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, userId])
+  @@map("staff")
+}
+
+model StaffInvite {
+  id           String       @id @default(uuid())
+  restaurantId String
+  email        String
+  role         StaffRole
+  token        String       @unique
+  status       InviteStatus @default(pending)
+  expiresAt    DateTime
+  createdAt    DateTime     @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("staff_invites")
+}

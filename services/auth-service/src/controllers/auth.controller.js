@@ -56,42 +56,51 @@ export const login = async (req, res, next) => {
     }
 };
 
+export const getByUserId = async (req, res, next) => {
+    try {
+        const user = await getUserById(req.params.userId);
+        return sendSuccess(res, 200, { user });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // ── POST /api/v1/auth/refresh ─────────────────────────────────────
 export const refreshToken = async (req, res, next) => {
-  try {
-    // read from cookie first, fall back to body
-    const token = req.cookies?.refreshToken || req.body.refreshToken;
+    try {
+        // read from cookie first, fall back to body
+        const token = req.cookies?.refreshToken || req.body.refreshToken;
 
-    if (!token) {
-      return sendError(res, 401, 'UNAUTHORIZED', 'Refresh token missing');
+        if (!token) {
+            return sendError(res, 401, "UNAUTHORIZED", "Refresh token missing");
+        }
+
+        const { accessToken } = await refreshAccessToken(token);
+
+        // Set new access token cookie
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 15 * 60 * 1000,
+        });
+
+        return sendSuccess(res, 200, { accessToken }, "Token refreshed");
+    } catch (err) {
+        next(err);
     }
-
-    const { accessToken } = await refreshAccessToken(token);
-    
-    // Set new access token cookie
-    res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure:   process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge:   15 * 60 * 1000,
-    });
-
-    return sendSuccess(res, 200, { accessToken }, 'Token refreshed');
-  } catch (err) {
-    next(err);
-  }
 };
 
 // ── POST /api/v1/auth/logout ──────────────────────────────────────
 export const logout = async (req, res, next) => {
-  try {
-    await logoutUser(req.user.userId);
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
-    return sendSuccess(res, 200, null, 'Logged out successfully');
-  } catch (err) {
-    next(err);
-  }
+    try {
+        await logoutUser(req.user.userId);
+        res.clearCookie("accessToken");
+        res.clearCookie("refreshToken");
+        return sendSuccess(res, 200, null, "Logged out successfully");
+    } catch (err) {
+        next(err);
+    }
 };
 
 // ── GET /api/v1/auth/me ───────────────────────────────────────────
