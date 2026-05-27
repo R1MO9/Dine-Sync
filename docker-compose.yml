@@ -45,6 +45,26 @@ services:
             timeout: 5s
             retries: 5
 
+    postgres-menu:
+        image: postgres:16-alpine
+        container_name: ds-postgres-menu
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: menu_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_menu_data:/var/lib/postgresql/data
+        ports:
+            - "5434:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d menu_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
     redis:
         image: redis:7-alpine
         container_name: ds-redis
@@ -141,6 +161,30 @@ services:
             timeout: 5s
             retries: 3
 
+    menu-service:
+        build:
+            context: ./services/menu-service
+            dockerfile: Dockerfile
+        container_name: ds-menu-service
+        restart: unless-stopped
+        depends_on:
+            postgres-menu:
+                condition: service_healthy
+        env_file: ./services/menu-service/.env
+        environment:
+            PORT: 8003
+            NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-menu:5432/menu_db
+        ports:
+            - "8003:8003"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8003/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
 # ──────────────────────────────────────────────────────────────────
 # VOLUMES
 # ──────────────────────────────────────────────────────────────────
@@ -148,6 +192,7 @@ services:
 volumes:
     postgres_auth_data:
     postgres_restaurant_data:
+    postgres_menu_data:
     redis_data:
 
 # ──────────────────────────────────────────────────────────────────
