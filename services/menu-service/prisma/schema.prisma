@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,4 +5,117 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum DishStatus {
+  available
+  out_of_stock
+  hidden
+}
+
+enum SpiceLevel {
+  mild
+  medium
+  hot
+  extra_hot
+}
+
+enum FoodType {
+  veg
+  non_veg
+  vegan
+  egg
+}
+
+model Category {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+  description  String?
+  imageUrl     String?
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dishes Dish[]
+
+  @@unique([restaurantId, name])
+  @@map("categories")
+}
+
+model Dish {
+  id           String     @id @default(uuid())
+  restaurantId String
+  categoryId   String
+  name         String
+  description  String?
+  price        Decimal    @db.Decimal(10, 2)
+  imageUrl     String?
+  foodType     FoodType   @default(veg)
+  spiceLevel   SpiceLevel?
+  status       DishStatus @default(available)
+  isAvailable  Boolean    @default(true)
+  stockLinked  Boolean    @default(false)
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  customizations Customization[]
+  addOnGroups    AddOnGroup[]
+
+  @@map("dishes")
+}
+
+model Customization {
+  id         String   @id @default(uuid())
+  dishId     String
+  name       String
+  isRequired Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  dish    Dish                  @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  options CustomizationOption[]
+
+  @@map("customizations")
+}
+
+model CustomizationOption {
+  id              String   @id @default(uuid())
+  customizationId String
+  label           String
+  extraPrice      Decimal  @default(0) @db.Decimal(10, 2)
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  customization Customization @relation(fields: [customizationId], references: [id], onDelete: Cascade)
+
+  @@map("customization_options")
+}
+
+model AddOnGroup {
+  id        String   @id @default(uuid())
+  dishId    String
+  name      String
+  minSelect Int      @default(0)
+  maxSelect Int      @default(1)
+  createdAt DateTime @default(now())
+
+  dish   Dish    @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  addOns AddOn[]
+
+  @@map("add_on_groups")
+}
+
+model AddOn {
+  id           String   @id @default(uuid())
+  addOnGroupId String
+  name         String
+  price        Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+
+  addOnGroup AddOnGroup @relation(fields: [addOnGroupId], references: [id], onDelete: Cascade)
+
+  @@map("add_ons")
 }

@@ -2,12 +2,14 @@ import express from "express";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 
+import categoryRoutes from "./routes/category.routes.js";
+import dishRoutes from "./routes/dish.routes.js";
+import publicRoutes from "./routes/public.routes.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { sendError } from "./utils/response.js";
 
 const app = express();
 
-// ── Security ──────────────────────────────────────────────────────
 app.set("trust proxy", 1);
 app.use(helmet());
 
@@ -16,7 +18,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ── Health check ──────────────────────────────────────────────────
+// ── Health ────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {
     res.json({
         success: true,
@@ -26,15 +28,19 @@ app.get("/health", (req, res) => {
     });
 });
 
-// ── Routes ────────────────────────────────────────────────────────
+// ── Public routes (no auth — for QR scan) ────────────────────────
+app.use("/api/v1/menu/public", publicRoutes);
 
+// ── Protected routes (owner/manager) ─────────────────────────────
+app.use("/api/v1/menu/categories", categoryRoutes);
+app.use("/api/v1/menu/dishes", dishRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────
-app.use((req, res) => {
-    sendError(res, 404, "ROUTE_NOT_FOUND", `Cannot ${req.method} ${req.originalUrl}`);
-});
+app.use((req, res) =>
+    sendError(res, 404, "ROUTE_NOT_FOUND", `Cannot ${req.method} ${req.originalUrl}`)
+);
 
-// ── Global error handler ──────────────────────────────────────────
+// ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);
 
 export default app;
