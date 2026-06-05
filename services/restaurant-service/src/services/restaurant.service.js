@@ -16,6 +16,25 @@ export const getRestaurantByOwner = async (ownerId) => {
     return restaurant;
 };
 
+export const linkOwnerRestaurantInAuth = async (ownerId, restaurantId) => {
+    const response = await fetch(
+        `${config.services.auth}/api/v1/auth/internal/user/${ownerId}/restaurant`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ restaurantId }),
+        }
+    );
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.success) {
+        const err = new Error(data?.message || "Failed to link restaurant to owner");
+        err.statusCode = response.status || 502;
+        err.code = data?.code || "AUTH_SYNC_FAILED";
+        throw err;
+    }
+};
+
 // ── Restaurant ────────────────────────────────────────────────────
 export const createRestaurant = async ({ name, subdomain, address, phone }, ownerId) => {
     const existing = await prisma.restaurant.findUnique({ where: { subdomain } });
@@ -25,9 +44,18 @@ export const createRestaurant = async ({ name, subdomain, address, phone }, owne
         err.code = "SUBDOMAIN_TAKEN";
         throw err;
     }
-    return prisma.restaurant.create({
+    const restaurant = await prisma.restaurant.create({
         data: { name, subdomain, address, phone, ownerId },
     });
+
+    try {
+        await linkOwnerRestaurantInAuth(ownerId, restaurant.id);
+    } catch (err) {
+        await prisma.restaurant.delete({ where: { id: restaurant.id } }).catch(() => null);
+        throw err;
+    }
+
+    return restaurant;
 };
 
 export const getRestaurantByOwnerService = async (ownerId) => {

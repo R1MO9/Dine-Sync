@@ -4,6 +4,7 @@ import {
     refreshAccessToken,
     logoutUser,
     getUserById,
+    linkRestaurantToOwner,
 } from "../services/auth.service.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 import logger from "../utils/logger.js";
@@ -60,6 +61,15 @@ export const getByUserId = async (req, res, next) => {
     try {
         const user = await getUserById(req.params.userId);
         return sendSuccess(res, 200, { user });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const linkOwnerRestaurant = async (req, res, next) => {
+    try {
+        const user = await linkRestaurantToOwner(req.params.userId, req.body.restaurantId);
+        return sendSuccess(res, 200, { user }, "Restaurant linked to owner");
     } catch (err) {
         next(err);
     }

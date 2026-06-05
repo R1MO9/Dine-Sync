@@ -97,7 +97,7 @@ export const acceptInvite = async ({ token, name, password }) => {
     const authResponse = await fetch(`${config.services.auth}/api/v1/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role, restaurantId }),
     });
 
     const authData = await authResponse.json();

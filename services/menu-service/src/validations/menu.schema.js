@@ -21,7 +21,7 @@ export const createDishSchema = z.object({
     description: z.string().max(500).trim().optional(),
     price: z.number({ required_error: "Price is required" }).positive().multipleOf(0.01),
     foodType: z.enum(["veg", "non_veg", "vegan", "egg"]).default("veg"),
-    spiceLevel: z.enum(["mild", "medium", "hot", "extra_hot"]).optional(),
+    spiceLevel: z.enum(["none", "mild", "medium", "hot", "extra_hot"]).optional(),
     sortOrder: z.number().int().min(0).optional(),
 });
 
@@ -30,7 +30,7 @@ export const updateDishSchema = z.object({
     description: z.string().max(500).trim().optional(),
     price: z.number().positive().multipleOf(0.01).optional(),
     foodType: z.enum(["veg", "non_veg", "vegan", "egg"]).optional(),
-    spiceLevel: z.enum(["mild", "medium", "hot", "extra_hot"]).optional().nullable(),
+    spiceLevel: z.enum(["none", "mild", "medium", "hot", "extra_hot"]).optional().nullable(),
     sortOrder: z.number().int().min(0).optional(),
 });
 

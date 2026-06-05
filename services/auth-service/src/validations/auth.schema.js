@@ -45,3 +45,8 @@ export const refreshTokenSchema = z.object({
         .string({ required_error: "Refresh token is required" })
         .min(1, "Refresh token is required"),
 });
+
+// ── Internal: Link Restaurant ─────────────────────────────────────
+export const linkRestaurantSchema = z.object({
+    restaurantId: z.string({ required_error: "Restaurant ID is required" }).uuid("Invalid ID"),
+});

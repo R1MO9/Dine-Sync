@@ -6,10 +6,16 @@ import {
     refreshToken,
     getMe,
     getByUserId,
+    linkOwnerRestaurant,
 } from "../controllers/auth.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validate.js";
-import { registerSchema, loginSchema, refreshTokenSchema } from "../validations/auth.schema.js";
+import {
+    registerSchema,
+    loginSchema,
+    refreshTokenSchema,
+    linkRestaurantSchema,
+} from "../validations/auth.schema.js";
 
 const router = Router();
 
@@ -34,5 +40,10 @@ router.post("/logout", authenticate, logout);
 
 // Internal route — called by other services only
 router.get("/internal/user/:userId", getByUserId);
+router.patch(
+    "/internal/user/:userId/restaurant",
+    validate(linkRestaurantSchema),
+    linkOwnerRestaurant
+);
 
 export default router;

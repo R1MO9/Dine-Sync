@@ -15,7 +15,7 @@ export const getPublicMenu = async (restaurantId) => {
                 orderBy: { sortOrder: "asc" },
                 include: {
                     customizations: { include: { options: true } },
-                    addOnGroups: { include: { addOns: { where: { isAvailable: true } } } },
+                    addOnGroups: { include: { addOns: true } },
                 },
             },
         },
@@ -34,7 +34,7 @@ export const getPublicDish = async (dishId, restaurantId) => {
         include: {
             category: { select: { id: true, name: true } },
             customizations: { include: { options: true } },
-            addOnGroups: { include: { addOns: { where: { isAvailable: true } } } },
+            addOnGroups: { include: { addOns: true } },
         },
     });
 

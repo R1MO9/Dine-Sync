@@ -3,6 +3,7 @@ import {
     getRestaurantByOwner,
     getRestaurantById,
     updateRestaurant,
+    linkOwnerRestaurantInAuth,
 } from "../services/restaurant.service.js";
 import { sendSuccess } from "../utils/response.js";
 import logger from "../utils/logger.js";
@@ -25,6 +26,13 @@ export const create = async (req, res, next) => {
 export const getMyRestaurant = async (req, res, next) => {
     try {
         const restaurant = await getRestaurantByOwner(req.user.userId);
+        await linkOwnerRestaurantInAuth(req.user.userId, restaurant.id).catch((err) => {
+            logger.warn("Failed to sync owner restaurant with auth-service", {
+                ownerId: req.user.userId,
+                restaurantId: restaurant.id,
+                error: err.message,
+            });
+        });
         return sendSuccess(res, 200, { restaurant });
     } catch (err) {
         next(err);

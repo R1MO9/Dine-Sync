@@ -18,10 +18,22 @@ export const registerUser = async ({ name, email, password, role }) => {
 
     const user = await prisma.user.create({
         data: { name, email, password: hashed, role },
-        select: { id: true, name: true, email: true, role: true, createdAt: true },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            restaurantId: true,
+            createdAt: true,
+        },
     });
 
-    const tokenPayload = { userId: user.id, email: user.email, role: user.role };
+    const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        restaurantId: user.restaurantId,
+    };
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
 
@@ -82,9 +94,8 @@ export const loginUser = async ({ email, password }) => {
 // ── Refresh Token ─────────────────────────────────────────────────
 export const refreshAccessToken = async (token) => {
     // Verify token signature
-    let decoded;
     try {
-        decoded = verifyRefreshToken(token);
+        verifyRefreshToken(token);
     } catch {
         const err = new Error("Invalid or expired refresh token");
         err.statusCode = 401;
@@ -93,8 +104,21 @@ export const refreshAccessToken = async (token) => {
     }
 
     // Check it exists in DB (not revoked)
-    const stored = await prisma.refreshToken.findUnique({ where: { token } });
-    if (!stored || stored.expiresAt < new Date()) {
+    const stored = await prisma.refreshToken.findUnique({
+        where: { token },
+        include: {
+            user: {
+                select: {
+                    id: true,
+                    email: true,
+                    role: true,
+                    restaurantId: true,
+                    isActive: true,
+                },
+            },
+        },
+    });
+    if (!stored || stored.expiresAt < new Date() || !stored.user?.isActive) {
         const err = new Error("Refresh token has been revoked or expired");
         err.statusCode = 401;
         err.code = "REFRESH_TOKEN_EXPIRED";
@@ -103,10 +127,10 @@ export const refreshAccessToken = async (token) => {
 
     // Issue new access token
     const accessToken = generateAccessToken({
-        userId: decoded.userId,
-        email: decoded.email,
-        role: decoded.role,
-        restaurantId: decoded.restaurantId,
+        userId: stored.user.id,
+        email: stored.user.email,
+        role: stored.user.role,
+        restaurantId: stored.user.restaurantId,
     });
 
     return { accessToken };
@@ -140,4 +164,39 @@ export const getUserById = async (userId) => {
     }
 
     return user;
+};
+
+// ── Internal: Link Owner Restaurant ───────────────────────────────
+export const linkRestaurantToOwner = async (userId, restaurantId) => {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, role: true, restaurantId: true },
+    });
+
+    if (!user || user.role !== "owner") {
+        const err = new Error("Owner user not found");
+        err.statusCode = 404;
+        err.code = "OWNER_NOT_FOUND";
+        throw err;
+    }
+
+    if (user.restaurantId && user.restaurantId !== restaurantId) {
+        const err = new Error("Owner is already linked to a different restaurant");
+        err.statusCode = 409;
+        err.code = "RESTAURANT_ALREADY_LINKED";
+        throw err;
+    }
+
+    return prisma.user.update({
+        where: { id: userId },
+        data: { restaurantId },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            restaurantId: true,
+            createdAt: true,
+        },
+    });
 };
