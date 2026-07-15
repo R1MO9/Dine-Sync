@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  placed        // customer placed order
+  approved      // floor manager approved
+  in_progress   // chef is cooking
+  ready         // chef marked ready
+  served        // floor manager marked served
+  cancelled     // cancelled by manager or customer
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  refunded
+  failed
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  restaurantId  String
+  tableId       String
+  tableNumber   Int                         // denormalized for display
+  customerId    String?                     // null = walk-in / unauthenticated
+  status        OrderStatus   @default(placed)
+  paymentStatus PaymentStatus @default(pending)
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  notes         String?                     // special instructions from customer
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  items      OrderItem[]
+  statusLogs OrderStatusLog[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String
+  dishId          String
+  dishName        String                    // denormalized — snapshot at order time
+  dishPrice       Decimal  @db.Decimal(10, 2)
+  quantity        Int      @default(1)
+  customizations  Json?                     // selected customization options
+  addOns          Json?                     // selected add-ons
+  itemTotal       Decimal  @db.Decimal(10, 2)
+  notes           String?                   // item-level note e.g. "no onions"
+  createdAt       DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+model OrderStatusLog {
+  id        String      @id @default(uuid())
+  orderId   String
+  status    OrderStatus
+  changedBy String?                         // userId of who changed the status
+  role      String?                         // role of who changed it
+  note      String?
+  createdAt DateTime    @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_status_logs")
+}

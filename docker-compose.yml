@@ -65,6 +65,26 @@ services:
             timeout: 5s
             retries: 5
 
+    postgres-order:
+        image: postgres:16-alpine
+        container_name: ds-postgres-order
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: order_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_order_data:/var/lib/postgresql/data
+        ports:
+            - "5435:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d order_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
     redis:
         image: redis:7-alpine
         container_name: ds-redis
@@ -185,6 +205,31 @@ services:
             timeout: 5s
             retries: 3
 
+    order-service:
+        build:
+            context: ./services/order-service
+            dockerfile: Dockerfile
+        container_name: ds-order-service
+        restart: unless-stopped
+        depends_on:
+           postgres-order:
+                condition: service_healthy
+        env_file: ./services/order-service/.env
+        environment:
+            PORT: 8004
+            NODE_ENV: development
+            REDIS_HOST: redis
+            REDIS_PORT: 6379
+        ports:
+            - "8004:8004"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8004/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
 # ──────────────────────────────────────────────────────────────────
 # VOLUMES
 # ──────────────────────────────────────────────────────────────────
@@ -193,6 +238,7 @@ volumes:
     postgres_auth_data:
     postgres_restaurant_data:
     postgres_menu_data:
+    postgres_order_data:
     redis_data:
 
 # ──────────────────────────────────────────────────────────────────
