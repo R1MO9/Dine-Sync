@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StockChangeReason {
+  restock
+  order_deduction
+  manual_adjustment
+  correction
+}
+
+model StockItem {
+  id                String   @id @default(uuid())
+  restaurantId      String
+  dishId            String
+  quantity          Int      @default(0)
+  lowStockThreshold Int      @default(10)
+  isTracked         Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  logs StockLog[]
+
+  @@unique([restaurantId, dishId])
+  @@map("stock_items")
+}
+
+model StockLog {
+  id          String             @id @default(uuid())
+  stockItemId String
+  change      Int
+  reason      StockChangeReason
+  note        String?
+  createdAt   DateTime           @default(now())
+
+  stockItem StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@map("stock_logs")
+}

@@ -24,6 +24,12 @@ const config = {
         order: process.env.ORDER_SERVICE_URL || "http://localhost:8004",
     },
 
+    kafka: {
+        brokers: (process.env.KAFKA_BROKERS || "localhost:29092").split(","),
+        clientId: "kitchen-queue-service",
+        groupId: "kitchen-queue-service-group",
+    },
+
     email: {
         host: process.env.SMTP_HOST || "smtp.gmail.com",
         port: parseInt(process.env.SMTP_PORT || "587"),

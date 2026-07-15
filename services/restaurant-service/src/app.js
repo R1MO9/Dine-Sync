@@ -5,6 +5,8 @@ import cookieParser from "cookie-parser";
 import restaurantRoutes from "./routes/restaurant.routes.js";
 import tableRoutes from "./routes/table.routes.js";
 import staffRoutes from "./routes/staff.routes.js";
+import internalRoutes from "./routes/internal.routes.js";
+import { internalAuth } from "./middlewares/internalAuth.middleware.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { sendError } from "./utils/response.js";
 
@@ -33,6 +35,9 @@ app.get("/health", (req, res) => {
 app.use("/api/v1/restaurants", restaurantRoutes);
 app.use("/api/v1/tables", tableRoutes);
 app.use("/api/v1/staff", staffRoutes);
+
+// ── Internal (service-to-service only) ───────────────────────────
+app.use("/internal", internalAuth, internalRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────
 app.use((req, res) => {

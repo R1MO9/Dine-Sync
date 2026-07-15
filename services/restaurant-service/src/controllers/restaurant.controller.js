@@ -42,7 +42,7 @@ export const getMyRestaurant = async (req, res, next) => {
 // ── GET /api/v1/restaurants/:id ───────────────────────────────────
 export const getById = async (req, res, next) => {
     try {
-        const restaurant = await getRestaurantById(req.params.id);
+        const restaurant = await getRestaurantById(req.params.id, req.user);
         return sendSuccess(res, 200, { restaurant });
     } catch (err) {
         next(err);

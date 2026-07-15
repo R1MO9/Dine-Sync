@@ -148,7 +148,8 @@ export const getStaffByRestaurant = async (ownerId) => {
         staffList.map(async (staff) => {
             try {
                 const res = await fetch(
-                    `${config.services.auth}/api/v1/auth/internal/user/${staff.userId}`
+                    `${config.services.auth}/api/v1/auth/internal/user/${staff.userId}`,
+                    { headers: { "X-Internal-Api-Key": config.internalApiKey } }
                 );
                 const data = await res.json();
                 return {
@@ -184,8 +185,20 @@ const getRestaurantByOwner = async (ownerId) => {
     return restaurant;
 };
 
-export const removeStaff = async (staffId, restaurantId) => {
-    const staff = await prisma.staff.findFirst({ where: { id: staffId, restaurantId } });
+export const removeStaff = async (staffId, ownerId) => {
+    const restaurant = await prisma.restaurant.findFirst({
+        where: { ownerId, isActive: true },
+    });
+    if (!restaurant) {
+        const err = new Error("You must create a restaurant first");
+        err.statusCode = 404;
+        err.code = "NO_RESTAURANT";
+        throw err;
+    }
+
+    const staff = await prisma.staff.findFirst({
+        where: { id: staffId, restaurantId: restaurant.id },
+    });
     if (!staff) {
         const err = new Error("Staff member not found");
         err.statusCode = 404;

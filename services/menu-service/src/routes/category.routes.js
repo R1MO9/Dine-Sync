@@ -9,7 +9,11 @@ import {
 } from "../controllers/category.controller.js";
 import { authenticate, authorize } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validate.js";
-import { createCategorySchema, updateCategorySchema } from "../validations/menu.schema.js";
+import {
+    createCategorySchema,
+    updateCategorySchema,
+    reorderSchema,
+} from "../validations/menu.schema.js";
 
 const router = Router();
 
@@ -25,7 +29,7 @@ router.get("/", authorize("owner", "floor_manager"), getAll);
 router.get("/:id", authorize("owner", "floor_manager"), getById);
 
 // PATCH  /api/v1/menu/categories/reorder      — reorder categories
-router.patch("/reorder", authorize("owner"), reorder);
+router.patch("/reorder", authorize("owner"), validate(reorderSchema), reorder);
 
 // PATCH  /api/v1/menu/categories/:id          — update category
 router.patch("/:id", authorize("owner"), validate(updateCategorySchema), update);

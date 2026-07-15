@@ -38,6 +38,12 @@ export const toggleAvailabilitySchema = z.object({
     isAvailable: z.boolean({ required_error: "isAvailable is required" }),
 });
 
+export const reorderSchema = z.object({
+    orderedIds: z
+        .array(z.string().uuid())
+        .min(1, "At least one id is required"),
+});
+
 // ── Customization ─────────────────────────────────────────────────
 export const createCustomizationSchema = z.object({
     name: z.string({ required_error: "Name is required" }).min(2).max(100).trim(),

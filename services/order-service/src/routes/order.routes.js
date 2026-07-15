@@ -7,19 +7,20 @@ import {
     getById,
     updateStatus,
 } from "../controllers/order.controller.js";
-import { authenticate, authorize } from "../middlewares/auth.middleware.js";
+import { authenticate, authorize, optionalAuthenticate } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validate.js";
 import { placeOrderSchema, updateStatusSchema } from "../validations/order.schema.js";
 
 const router = Router();
 
-// ── Public — no auth needed ───────────────────────────────────────
+// ── Public — no auth required, but attach req.user if the customer happens
+//    to be logged in (optionalAuthenticate never rejects the request) ─────
 
 // POST /api/v1/orders — customer places order from QR page
-router.post("/", validate(placeOrderSchema), place);
+router.post("/", optionalAuthenticate, validate(placeOrderSchema), place);
 
 // GET /api/v1/orders/table/:tableId?restaurantId=xxx — customer polls order status
-router.get("/table/:tableId", getByTable);
+router.get("/table/:tableId", optionalAuthenticate, getByTable);
 
 // ── Protected ─────────────────────────────────────────────────────
 router.use(authenticate);

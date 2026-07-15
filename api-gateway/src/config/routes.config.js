@@ -35,7 +35,10 @@ const ROUTES = [
     { path: "/api/v1/menu", target: SERVICES.MENU, auth: true, roles: ["owner", "floor_manager"] },
 
     // ── Orders ────────────────────────────────────────────────────
-    { path: "/api/v1/orders", target: SERVICES.ORDER, auth: true, roles: [] },
+    // auth:false — order-service has its own public routes (place/track order)
+    // mixed with protected ones, and verifies the JWT itself when the gateway
+    // doesn't attach X-User-* headers (see its auth.middleware.js).
+    { path: "/api/v1/orders", target: SERVICES.ORDER, auth: false },
 
     // ── Kitchen Queue ─────────────────────────────────────────────
     {
@@ -58,7 +61,9 @@ const ROUTES = [
     },
 
     // ── Notifications (WebSocket handled by notification service) ─
-    { path: "/api/v1/notifications", target: SERVICES.NOTIFICATION, auth: true, roles: [] },
+    // ws:true — proxies the Socket.IO upgrade request through too (see app.js/server.js).
+    // A client can also connect directly to NOTIFICATION_SERVICE_URL as a fallback.
+    { path: "/api/v1/notifications", target: SERVICES.NOTIFICATION, auth: true, roles: [], ws: true },
 ];
 
 export default ROUTES;

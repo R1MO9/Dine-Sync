@@ -44,10 +44,19 @@ const config = {
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
         s3Bucket: process.env.AWS_S3_BUCKET,
     },
+
+    internalApiKey: process.env.INTERNAL_API_KEY,
 };
 
 if (config.env === "production") {
-    ["DATABASE_URL", "JWT_ACCESS_SECRET", "JWT_INVITE_SECRET", "SMTP_USER", "SMTP_PASS"].forEach(
+    [
+        "DATABASE_URL",
+        "JWT_ACCESS_SECRET",
+        "JWT_INVITE_SECRET",
+        "SMTP_USER",
+        "SMTP_PASS",
+        "INTERNAL_API_KEY",
+    ].forEach(
         (key) => {
             if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
         }

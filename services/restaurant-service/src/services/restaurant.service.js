@@ -21,7 +21,10 @@ export const linkOwnerRestaurantInAuth = async (ownerId, restaurantId) => {
         `${config.services.auth}/api/v1/auth/internal/user/${ownerId}/restaurant`,
         {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "X-Internal-Api-Key": config.internalApiKey,
+            },
             body: JSON.stringify({ restaurantId }),
         }
     );
@@ -65,18 +68,30 @@ export const getRestaurantByOwnerService = async (ownerId) => {
     });
 };
 
-export const getRestaurantById = async (id) => {
-    const restaurant = await prisma.restaurant.findUnique({
-        where: { id },
-        include: { tables: true, staff: true },
-    });
+export const getRestaurantById = async (id, requester) => {
+    const restaurant = await prisma.restaurant.findUnique({ where: { id } });
     if (!restaurant) {
         const err = new Error("Restaurant not found");
         err.statusCode = 404;
         err.code = "NOT_FOUND";
         throw err;
     }
-    return restaurant;
+
+    const isInsider =
+        restaurant.ownerId === requester?.userId || requester?.restaurantId === restaurant.id;
+
+    if (!isInsider) {
+        // Outsiders (any other authenticated user) only get public-safe fields —
+        // no staff list or table QR tokens.
+        const { id, name, subdomain, address, phone, logoUrl, plan } = restaurant;
+        return { id, name, subdomain, address, phone, logoUrl, plan };
+    }
+
+    const [tables, staff] = await Promise.all([
+        prisma.table.findMany({ where: { restaurantId: id } }),
+        prisma.staff.findMany({ where: { restaurantId: id } }),
+    ]);
+    return { ...restaurant, tables, staff };
 };
 
 export const updateRestaurant = async (id, ownerId, data) => {
@@ -111,6 +126,22 @@ export const createTable = async (ownerId, { number, label }) => {
     });
 };
 
+// Internal — used by order-service to validate a table before placing an order.
+// Returns only the minimal, non-sensitive fields a downstream service needs.
+export const getTableInternal = async (tableId) => {
+    const table = await prisma.table.findUnique({
+        where: { id: tableId },
+        select: { id: true, restaurantId: true, number: true, isActive: true },
+    });
+    if (!table) {
+        const err = new Error("Table not found");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+    }
+    return table;
+};
+
 export const getTablesByRestaurant = async (ownerId) => {
     const restaurant = await getRestaurantByOwner(ownerId);
     return prisma.table.findMany({
@@ -134,69 +165,4 @@ export const deleteTable = async (tableId, ownerId) => {
     return prisma.table.update({ where: { id: tableId }, data: { isActive: false } });
 };
 
-// ── Staff ─────────────────────────────────────────────────────────
-
-export const addStaff = async (restaurantId, { userId, role }) => {
-    const existing = await prisma.staff.findUnique({
-        where: { restaurantId_userId: { restaurantId, userId } },
-    });
-
-    if (existing) {
-        const err = new Error("User is already a staff member");
-        err.statusCode = 409;
-        err.code = "STAFF_EXISTS";
-        throw err;
-    }
-
-    return prisma.staff.create({ data: { restaurantId, userId, role } });
-};
-
-export const getStaffByRestaurant = async (ownerId) => {
-    const restaurant = await getRestaurantByOwner(ownerId);
-
-    const staffList = await prisma.staff.findMany({
-        where: { restaurantId: restaurant.id, isActive: true },
-        orderBy: { createdAt: "asc" },
-        select: { id: true, userId: true, role: true, createdAt: true },
-    });
-
-    // Fetch user details from auth-service for each staff member
-    const staffWithUsers = await Promise.all(
-        staffList.map(async (staff) => {
-            try {
-                const res = await fetch(
-                    `${config.services.auth}/api/v1/auth/internal/user/${staff.userId}`
-                );
-                const data = await res.json();
-                return {
-                    id: staff.id,
-                    role: staff.role,
-                    createdAt: staff.createdAt,
-                    user: data.success ? data.data.user : { id: staff.userId },
-                };
-            } catch {
-                return {
-                    id: staff.id,
-                    role: staff.role,
-                    createdAt: staff.createdAt,
-                    user: { id: staff.userId },
-                };
-            }
-        })
-    );
-
-    return staffWithUsers;
-};
-
-export const removeStaff = async (staffId, restaurantId) => {
-    const staff = await prisma.staff.findFirst({ where: { id: staffId, restaurantId } });
-
-    if (!staff) {
-        const err = new Error("Staff member not found");
-        err.statusCode = 404;
-        err.code = "NOT_FOUND";
-        throw err;
-    }
-
-    return prisma.staff.update({ where: { id: staffId }, data: { isActive: false } });
-};
+// Staff management (invite/accept/list/remove) lives in staff.service.js.

@@ -6,7 +6,9 @@ import { TOPICS } from "../kafka/topics.js";
 
 // ── Helper: fetch table details from restaurant-service ──────────────────
 const fetchTable = async (tableId, restaurantId) => {
-    const res = await fetch(`${config.services.restaurant}/api/v1/${restaurantId}/tables/${tableId}`);
+    const res = await fetch(`${config.services.restaurant}/internal/tables/${tableId}`, {
+        headers: { "X-Internal-Api-Key": config.internalApiKey },
+    });
     const data = await res.json();
     if (!res.ok) {
         const err = new Error("Table not found");
@@ -94,14 +96,15 @@ export const placeOrder = async (
             orderId: order.id,
             restaurantId,
             tableId,
-            tableNumber,
+            tableNumber: table.number,
             totalAmount,
             itemCount: order.items.length,
+            items: enrichedItems.map((i) => ({ dishId: i.dishId, quantity: i.quantity })),
         },
         restaurantId
     );
 
-    logger.info("Order placed", { orderId: order.id, restaurantId, tableNumber });
+    logger.info("Order placed", { orderId: order.id, restaurantId, tableNumber: table.number });
     return order;
 };
 

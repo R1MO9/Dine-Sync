@@ -36,8 +36,13 @@ app.get("/health", (req, res) => {
     });
 });
 
+// Proxy middleware instances that need their WS upgrade handler wired to the
+// underlying http.Server (see server.js) — http-proxy-middleware v3 doesn't
+// intercept upgrade requests automatically under a plain app.use().
+export const wsProxies = [];
+
 // ── Dynamic proxy registration ────────────────────────────────────
-ROUTES.forEach(({ path, target, auth, roles = [] }) => {
+ROUTES.forEach(({ path, target, auth, roles = [], ws = false }) => {
     const middlewares = [];
 
     // Conditionally apply JWT auth + role guard
@@ -60,7 +65,9 @@ ROUTES.forEach(({ path, target, auth, roles = [] }) => {
     }
 
     // Register proxy for this route
-    middlewares.push(createProxy(target));
+    const proxy = createProxy(target, ws ? { ws: true } : {});
+    if (ws) wsProxies.push(proxy);
+    middlewares.push(proxy);
     app.use(path, ...middlewares);
 });
 

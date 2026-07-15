@@ -1,4 +1,4 @@
-import app from "./src/app.js";
+import app, { wsProxies } from "./src/app.js";
 import config from "./src/config.js";
 import logger from "./src/utils/logger.js";
 
@@ -8,6 +8,11 @@ const server = app.listen(config.port, () => {
         env: config.env,
     });
 });
+
+// http-proxy-middleware needs the raw http.Server's 'upgrade' event wired
+// per WS-enabled route (e.g. Socket.IO for /api/v1/notifications) — a plain
+// app.use() doesn't intercept protocol upgrades on its own.
+wsProxies.forEach((proxy) => server.on("upgrade", proxy.upgrade));
 
 // ── Graceful shutdown ─────────────────────────────────────────────
 const shutdown = (signal) => {

@@ -42,6 +42,38 @@ export const authenticate = (req, res, next) => {
     }
 };
 
+/**
+ * Same sources as authenticate (gateway headers, then cookie/Bearer JWT),
+ * but never rejects the request — used on public routes where a logged-in
+ * customer should still get req.user attached (e.g. to record customerId),
+ * while an anonymous customer proceeds with req.user left unset.
+ */
+export const optionalAuthenticate = (req, res, next) => {
+    const userId = req.headers["x-user-id"];
+    const userRole = req.headers["x-user-role"];
+    const restaurantId = req.headers["x-restaurant-id"];
+
+    if (userId && userRole) {
+        req.user = { userId, role: userRole, restaurantId };
+        return next();
+    }
+
+    let token = req.cookies?.accessToken;
+    if (!token) {
+        const authHeader = req.headers["authorization"];
+        if (authHeader?.startsWith("Bearer ")) token = authHeader.split(" ")[1];
+    }
+
+    if (!token) return next();
+
+    try {
+        req.user = jwt.verify(token, config.jwt.accessSecret);
+    } catch {
+        // invalid/expired token on a public route — proceed anonymously
+    }
+    next();
+};
+
 export const authorize =
     (...allowedRoles) =>
     (req, res, next) => {

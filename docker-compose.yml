@@ -85,6 +85,86 @@ services:
             timeout: 5s
             retries: 5
 
+    postgres-kitchen:
+        image: postgres:16-alpine
+        container_name: ds-postgres-kitchen
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: kitchen_queue_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_kitchen_data:/var/lib/postgresql/data
+        ports:
+            - "5436:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d kitchen_queue_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    postgres-payment:
+        image: postgres:16-alpine
+        container_name: ds-postgres-payment
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: payment_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_payment_data:/var/lib/postgresql/data
+        ports:
+            - "5437:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d payment_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    postgres-inventory:
+        image: postgres:16-alpine
+        container_name: ds-postgres-inventory
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: inventory_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_inventory_data:/var/lib/postgresql/data
+        ports:
+            - "5438:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d inventory_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    postgres-notification:
+        image: postgres:16-alpine
+        container_name: ds-postgres-notification
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: notification_db
+            POSTGRES_USER: ${POSTGRES_USER:-dinesync}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+        volumes:
+            - postgres_notification_data:/var/lib/postgresql/data
+        ports:
+            - "5439:5432"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dinesync} -d notification_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
     redis:
         image: redis:7-alpine
         container_name: ds-redis
@@ -101,6 +181,34 @@ services:
             interval: 10s
             timeout: 5s
             retries: 5
+
+    # Single-node Kafka broker (KRaft mode — no separate Zookeeper needed).
+    # order-service/kitchen-queue-service/payment-service/inventory-service/
+    # notification-service all connect to this via KAFKA_BROKERS=kafka:9092.
+    kafka:
+        image: bitnami/kafka:3.7
+        container_name: ds-kafka
+        restart: unless-stopped
+        environment:
+            KAFKA_CFG_NODE_ID: 0
+            KAFKA_CFG_PROCESS_ROLES: controller,broker
+            KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+            KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+            KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+            KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+            KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+            ALLOW_PLAINTEXT_LISTENER: "yes"
+        volumes:
+            - kafka_data:/bitnami/kafka
+        ports:
+            - "29092:29092"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+            interval: 15s
+            timeout: 10s
+            retries: 10
 
     # ──────────────────────────────────────────────────────────────
     # SERVICES
@@ -123,6 +231,12 @@ services:
             REDIS_PORT: 6379
             AUTH_SERVICE_URL: http://auth-service:8001
             RESTAURANT_SERVICE_URL: http://restaurant-service:8002
+            MENU_SERVICE_URL: http://menu-service:8003
+            ORDER_SERVICE_URL: http://order-service:8004
+            KITCHEN_SERVICE_URL: http://kitchen-queue-service:8005
+            PAYMENT_SERVICE_URL: http://payment-service:8006
+            INVENTORY_SERVICE_URL: http://inventory-service:8007
+            NOTIFICATION_SERVICE_URL: http://notification-service:8008
         ports:
             - "8000:8000"
         networks:
@@ -214,18 +328,127 @@ services:
         depends_on:
            postgres-order:
                 condition: service_healthy
+           kafka:
+                condition: service_healthy
         env_file: ./services/order-service/.env
         environment:
             PORT: 8004
             NODE_ENV: development
             REDIS_HOST: redis
             REDIS_PORT: 6379
+            KAFKA_BROKERS: kafka:9092
+            RESTAURANT_SERVICE_URL: http://restaurant-service:8002
+            MENU_SERVICE_URL: http://menu-service:8003
         ports:
             - "8004:8004"
         networks:
             - dine-sync-net
         healthcheck:
             test: ["CMD-SHELL", "wget -qO- http://localhost:8004/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
+    kitchen-queue-service:
+        build:
+            context: ./services/kitchen-queue-service
+            dockerfile: Dockerfile
+        container_name: ds-kitchen-queue-service
+        restart: unless-stopped
+        depends_on:
+            postgres-kitchen:
+                condition: service_healthy
+            kafka:
+                condition: service_healthy
+        env_file: ./services/kitchen-queue-service/.env
+        environment:
+            PORT: 8005
+            NODE_ENV: development
+            KAFKA_BROKERS: kafka:9092
+        ports:
+            - "8005:8005"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8005/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
+    payment-service:
+        build:
+            context: ./services/payment-service
+            dockerfile: Dockerfile
+        container_name: ds-payment-service
+        restart: unless-stopped
+        depends_on:
+            postgres-payment:
+                condition: service_healthy
+            kafka:
+                condition: service_healthy
+        env_file: ./services/payment-service/.env
+        environment:
+            PORT: 8006
+            NODE_ENV: development
+            KAFKA_BROKERS: kafka:9092
+        ports:
+            - "8006:8006"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8006/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
+    inventory-service:
+        build:
+            context: ./services/inventory-service
+            dockerfile: Dockerfile
+        container_name: ds-inventory-service
+        restart: unless-stopped
+        depends_on:
+            postgres-inventory:
+                condition: service_healthy
+            kafka:
+                condition: service_healthy
+        env_file: ./services/inventory-service/.env
+        environment:
+            PORT: 8007
+            NODE_ENV: development
+            KAFKA_BROKERS: kafka:9092
+        ports:
+            - "8007:8007"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8007/health || exit 1"]
+            interval: 15s
+            timeout: 5s
+            retries: 3
+
+    notification-service:
+        build:
+            context: ./services/notification-service
+            dockerfile: Dockerfile
+        container_name: ds-notification-service
+        restart: unless-stopped
+        depends_on:
+            postgres-notification:
+                condition: service_healthy
+            kafka:
+                condition: service_healthy
+        env_file: ./services/notification-service/.env
+        environment:
+            PORT: 8008
+            NODE_ENV: development
+            KAFKA_BROKERS: kafka:9092
+        ports:
+            - "8008:8008"
+        networks:
+            - dine-sync-net
+        healthcheck:
+            test: ["CMD-SHELL", "wget -qO- http://localhost:8008/health || exit 1"]
             interval: 15s
             timeout: 5s
             retries: 3
@@ -239,7 +462,12 @@ volumes:
     postgres_restaurant_data:
     postgres_menu_data:
     postgres_order_data:
+    postgres_kitchen_data:
+    postgres_payment_data:
+    postgres_inventory_data:
+    postgres_notification_data:
     redis_data:
+    kafka_data:
 
 # ──────────────────────────────────────────────────────────────────
 # NETWORKS

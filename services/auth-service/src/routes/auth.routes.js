@@ -9,6 +9,7 @@ import {
     linkOwnerRestaurant,
 } from "../controllers/auth.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
+import { internalAuth } from "../middlewares/internalAuth.middleware.js";
 import { validate } from "../middlewares/validate.js";
 import {
     registerSchema,
@@ -38,10 +39,11 @@ router.get("/me", authenticate, getMe);
 // POST /api/v1/auth/logout
 router.post("/logout", authenticate, logout);
 
-// Internal route — called by other services only
-router.get("/internal/user/:userId", getByUserId);
+// Internal routes — service-to-service only, guarded by shared secret
+router.get("/internal/user/:userId", internalAuth, getByUserId);
 router.patch(
     "/internal/user/:userId/restaurant",
+    internalAuth,
     validate(linkRestaurantSchema),
     linkOwnerRestaurant
 );

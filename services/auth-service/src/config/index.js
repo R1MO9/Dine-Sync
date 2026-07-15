@@ -18,11 +18,13 @@ const config = {
     bcrypt: {
         saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS || "12"),
     },
+
+    internalApiKey: process.env.INTERNAL_API_KEY,
 };
 
 // Guard required values in production
 if (config.env === "production") {
-    ["DATABASE_URL", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"].forEach((key) => {
+    ["DATABASE_URL", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET", "INTERNAL_API_KEY"].forEach((key) => {
         if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
     });
 }

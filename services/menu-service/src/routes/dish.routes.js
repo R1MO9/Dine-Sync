@@ -18,6 +18,7 @@ import {
     toggleAvailabilitySchema,
     createCustomizationSchema,
     createAddOnGroupSchema,
+    reorderSchema,
 } from "../validations/menu.schema.js";
 
 const router = Router();
@@ -31,7 +32,7 @@ router.post("/", authorize("owner"), validate(createDishSchema), create);
 router.get("/", authorize("owner", "floor_manager"), getAll);
 
 // PATCH  /api/v1/menu/dishes/reorder                  — reorder dishes
-router.patch("/reorder", authorize("owner"), reorder);
+router.patch("/reorder", authorize("owner"), validate(reorderSchema), reorder);
 
 // GET    /api/v1/menu/dishes/:id                      — single dish
 router.get("/:id", authorize("owner", "floor_manager"), getById);

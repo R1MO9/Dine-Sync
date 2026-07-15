@@ -25,8 +25,16 @@ npm run dev:auth           # services/auth-service :8001
 npm run dev:restaurant     # services/restaurant-service :8002
 npm run dev:menu           # services/menu-service :8003
 npm run dev:order          # services/order-service :8004
-npm run dev:kitchen        # services/kitchen-queue-service :8005 (scaffold only, see below)
+npm run dev:kitchen        # services/kitchen-queue-service :8005
+npm run dev:payment        # services/payment-service :8006
+npm run dev:inventory      # services/inventory-service :8007
+npm run dev:notification   # services/notification-service :8008
 ```
+
+All service ports (8001-8008) and Kafka (`kafka:9092` inside compose, `localhost:29092`
+from the host) need to be reachable for the event-driven services (order, kitchen-queue,
+payment, inventory, notification) to work — see `docker-compose.yml`, which now includes a
+single-node KRaft-mode Kafka broker alongside the per-service Postgres containers.
 
 Lint / test / format across all workspaces:
 
@@ -45,7 +53,8 @@ npm run test --workspace=services/menu-service
 npx jest path/to/file.test.js --workspace=services/menu-service   # single test file
 ```
 
-Prisma, per service that has a schema (auth, restaurant, menu, order, kitchen-queue):
+Prisma, per service that has a schema (auth, restaurant, menu, order, kitchen-queue,
+payment, inventory, notification):
 
 ```bash
 npm run db:generate --workspace=services/<name>-service
@@ -83,8 +92,10 @@ API Gateway :8000
         |-- /api/v1/staff
         |-- /api/v1/menu(/public)     -> Menu Service :8003         -> menu_db
         |-- /api/v1/orders            -> Order Service :8004        -> order_db (+ Kafka)
-        |-- /api/v1/queue             -> Kitchen Queue Service :8005 (scaffold, not yet routed)
-        `-- /api/v1/payments|inventory|notifications -> not yet implemented
+        |-- /api/v1/queue             -> Kitchen Queue Svc :8005    -> kitchen_queue_db (+ Kafka)
+        |-- /api/v1/payments|webhooks -> Payment Service :8006      -> payment_db (+ Kafka)
+        |-- /api/v1/inventory         -> Inventory Service :8007    -> inventory_db (+ Kafka)
+        `-- /api/v1/notifications     -> Notification Svc :8008     -> notification_db (+ Kafka, Socket.IO)
 ```
 
 ### Database-per-service
@@ -113,7 +124,8 @@ other's tables directly.
 
 ### Per-service internal structure
 
-Every implemented service (`auth-service`, `restaurant-service`, `menu-service`, `order-service`)
+Every service (`auth-service`, `restaurant-service`, `menu-service`, `order-service`,
+`kitchen-queue-service`, `payment-service`, `inventory-service`, `notification-service`)
 follows the same layered layout under `src/`:
 
 ```
@@ -137,12 +149,38 @@ service, and reuse `sendSuccess`/`sendError` from `utils/response.js` for the re
 Restaurant tables and staff rows are deactivated (`isActive: false`), never physically deleted.
 Follow this convention for any new "removable" entity rather than issuing a hard `DELETE`.
 
-### Order service: Kafka
+### Event-driven services: Kafka
 
-`services/order-service/src/kafka/` defines `producer.js`, `consumer.js`, and `topics.js`
-(`order.placed`, `order.approved`, `order.status_updated`, `order.completed`, `payment.confirmed`).
-Order lifecycle changes are expected to be published as events for other services (kitchen queue,
-notifications) to consume, rather than services calling each other synchronously.
+Every event-driven service has its own `src/kafka/{producer.js,consumer.js,topics.js}` (each
+service defines its own local `topics.js` with the string names it needs — there's no shared
+topics package, matching this repo's per-service-owns-its-contracts style). Event flow:
+
+- **order-service** publishes `order.placed`, `order.approved`, `order.status_updated`,
+  `order.completed` and consumes `payment.confirmed` (see `handlePaymentConfirmed`).
+- **kitchen-queue-service** consumes order-service's topics to create/update `QueueTicket`
+  rows (a kitchen-facing prep queue, decoupled from the customer-facing `Order` status) and
+  publishes `kitchen.ticket_updated` when a chef advances a ticket.
+- **payment-service** publishes `payment.confirmed` (`{ orderId, restaurantId }`) after its
+  webhook verifies a payment — this is exactly the shape order-service's consumer expects.
+- **inventory-service** consumes `order.approved` (not `order.placed`, so a cancelled-before-
+  approval order never touches stock) to auto-decrement `StockItem` quantities.
+- **notification-service** consumes all of the above plus `kitchen.ticket_updated`, persists a
+  `Notification` row, and pushes it over Socket.IO to `restaurant:${restaurantId}` room clients.
+
+Prefer publishing a new event over adding a synchronous cross-service HTTP call when a service
+needs to react to something happening in another service.
+
+### Internal (service-to-service) routes
+
+A few endpoints exist only for other services to call, never end users — e.g. auth-service's
+`GET /internal/user/:userId` and `PATCH /internal/user/:userId/restaurant`, and
+restaurant-service's `GET /internal/tables/:id` (used by order-service to validate a table
+without requiring customer-level auth). These are mounted on `/internal/*` (outside
+`/api/v1`, so gateway routing never exposes them) and guarded by a shared-secret
+`internalAuth.middleware.js` checking the `X-Internal-Api-Key` header against the
+`INTERNAL_API_KEY` env var — every service's `.env` that calls one of these routes must have
+the same value. When adding a new internal endpoint, follow this same pattern rather than
+leaving it unauthenticated.
 
 ### Response format
 
@@ -162,14 +200,26 @@ code where the situation matches instead of inventing a new one.
 
 ## Service implementation status
 
-- **Implemented and routed through the gateway**: `api-gateway`, `auth-service`, `restaurant-service`,
-  `menu-service`, `order-service`.
-- **Scaffolded but not yet built out**: `kitchen-queue-service` currently only has `app.js` and
-  `config/` — no controllers/routes/services yet, and it is not yet wired into
-  `api-gateway/src/config/routes.config.js`'s target resolution beyond the `KITCHEN_SERVICE_URL` env var.
-- **Not started**: payment, inventory, notification services. Gateway routes for these paths exist in
-  `routes.config.js` but will proxy-error (502/504) until the services exist.
-- `shared/` and `infra/` workspace/directory placeholders exist but are currently empty.
+All eight services (`api-gateway`, `auth-service`, `restaurant-service`, `menu-service`,
+`order-service`, `kitchen-queue-service`, `payment-service`, `inventory-service`,
+`notification-service`) are implemented and routed through the gateway. `shared/` and `infra/`
+workspace/directory placeholders exist but are currently empty.
+
+Notes on the newer services:
+
+- **payment-service** picks its payment provider via `PAYMENT_PROVIDER` (`mock` default |
+  `razorpay`) through `src/providers/index.js` — see `src/providers/payment.provider.js` for the
+  interface every provider implements. The `razorpay` provider is a real implementation but is
+  untested without real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET`
+  credentials. Its webhook route (`/api/v1/webhooks/razorpay`) is mounted with `express.raw()`
+  ahead of the app's global `express.json()` — signature verification needs the exact raw bytes.
+- **notification-service** exposes a Socket.IO server (JWT passed via
+  `socket.handshake.auth.token`, joins a `restaurant:${restaurantId}` room). The gateway proxies
+  its WS upgrade too (`ws: true` on its `routes.config.js` entry, wired up in
+  `api-gateway/server.js` via `wsProxies` exported from `app.js`) — a client can also connect
+  directly to `NOTIFICATION_SERVICE_URL` as a fallback.
+- **kitchen-queue-service**'s `QueueTicket` status is independent of order-service's `Order.status`
+  — it's a separate kitchen-facing view kept in sync via Kafka, not a shared source of truth.
 
 ## Known inconsistency to be aware of
 
