@@ -150,6 +150,37 @@ export const getTablesByRestaurant = async (ownerId) => {
     });
 };
 
+// Public — resolves a scanned QR code to the restaurant/table it belongs to.
+// qrToken is an opaque one-way hash (see utils/qrcode.js), so this is the only
+// way a client can turn a scan into a restaurantId/tableId to load the menu.
+export const getTableByQrToken = async (qrToken) => {
+    const table = await prisma.table.findUnique({
+        where: { qrToken },
+        select: {
+            id: true,
+            restaurantId: true,
+            number: true,
+            isActive: true,
+            restaurant: { select: { name: true, logoUrl: true, isActive: true } },
+        },
+    });
+
+    if (!table || !table.isActive || !table.restaurant.isActive) {
+        const err = new Error("This QR code is no longer valid");
+        err.statusCode = 404;
+        err.code = "NOT_FOUND";
+        throw err;
+    }
+
+    return {
+        tableId: table.id,
+        restaurantId: table.restaurantId,
+        tableNumber: table.number,
+        restaurantName: table.restaurant.name,
+        restaurantLogoUrl: table.restaurant.logoUrl,
+    };
+};
+
 export const deleteTable = async (tableId, ownerId) => {
     const restaurant = await getRestaurantByOwner(ownerId);
 

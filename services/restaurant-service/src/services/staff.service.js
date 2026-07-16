@@ -93,11 +93,13 @@ export const acceptInvite = async ({ token, name, password }) => {
     // Validate token
     const { email, role, restaurantId } = await validateInviteToken(token);
 
-    // Call auth-service to create the user
+    // Call auth-service to create the user. The public register endpoint
+    // doesn't accept restaurantId (it would let anyone claim a tenant at
+    // signup), so it's linked separately below via the internal endpoint.
     const authResponse = await fetch(`${config.services.auth}/api/v1/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role, restaurantId }),
+        body: JSON.stringify({ name, email, password, role }),
     });
 
     const authData = await authResponse.json();
@@ -110,6 +112,41 @@ export const acceptInvite = async ({ token, name, password }) => {
     }
 
     const userId = authData.data.user.id;
+
+    // Link the new user to the restaurant (same internal endpoint owners use).
+    const linkResponse = await fetch(
+        `${config.services.auth}/api/v1/auth/internal/user/${userId}/restaurant`,
+        {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Internal-Api-Key": config.internalApiKey,
+            },
+            body: JSON.stringify({ restaurantId }),
+        },
+    );
+    if (!linkResponse.ok) {
+        const err = new Error("Failed to link staff account to restaurant");
+        err.statusCode = 502;
+        err.code = "AUTH_SYNC_FAILED";
+        throw err;
+    }
+
+    // The tokens from /register were minted before the link above, so their
+    // JWT payload's restaurantId claim is stale (null) — log in again to get
+    // a token that actually carries the linked restaurantId.
+    const loginResponse = await fetch(`${config.services.auth}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+    });
+    const loginData = await loginResponse.json();
+    if (!loginResponse.ok) {
+        const err = new Error("Failed to sign in after account creation");
+        err.statusCode = 502;
+        err.code = "AUTH_SYNC_FAILED";
+        throw err;
+    }
 
     // Link staff to restaurant + mark invite accepted (atomic transaction)
     const [staff] = await prisma.$transaction([
@@ -126,9 +163,9 @@ export const acceptInvite = async ({ token, name, password }) => {
 
     return {
         staff,
-        user: authData.data.user,
-        accessToken: authData.data.accessToken,
-        refreshToken: authData.data.refreshToken,
+        user: loginData.data.user,
+        accessToken: loginData.data.accessToken,
+        refreshToken: loginData.data.refreshToken,
     };
 };
 

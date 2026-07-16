@@ -7,13 +7,19 @@ import logger from "../utils/logger.js";
 // Requires RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET —
 // this file is untested without real Razorpay credentials.
 
-const client = new Razorpay({
-    key_id: config.payment.razorpay.keyId,
-    key_secret: config.payment.razorpay.keySecret,
-});
+let client;
+const getClient = () => {
+    if (!client) {
+        client = new Razorpay({
+            key_id: config.payment.razorpay.keyId,
+            key_secret: config.payment.razorpay.keySecret,
+        });
+    }
+    return client;
+};
 
 export const createOrder = async ({ amount, currency, receipt }) => {
-    const order = await client.orders.create({
+    const order = await getClient().orders.create({
         amount: Math.round(amount * 100), // Razorpay expects the smallest currency unit (paise)
         currency,
         receipt,

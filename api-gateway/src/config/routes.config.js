@@ -22,12 +22,10 @@ const ROUTES = [
 
     // ── Restaurant / Tenant ────────────────────────────────────────
     { path: "/api/v1/restaurants", target: SERVICES.RESTAURANT, auth: true, roles: ["owner"] },
-    {
-        path: "/api/v1/tables",
-        target: SERVICES.RESTAURANT,
-        auth: true,
-        roles: ["owner", "floor_manager"],
-    },
+    // auth:false — table.routes.js has a public GET /qr/:qrToken route (QR-scan
+    // resolution) alongside owner/floor_manager-only routes, and enforces its
+    // own authenticate/authorize per-route, same pattern as /api/v1/orders below.
+    { path: "/api/v1/tables", target: SERVICES.RESTAURANT, auth: false },
     { path: "/api/v1/staff", target: SERVICES.RESTAURANT, auth: true, roles: ["owner"] },
 
     // ── Menu (public scan route + protected management) ───────────

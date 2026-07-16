@@ -1,10 +1,14 @@
 import { Router } from "express";
-import { create, getAll, remove } from "../controllers/table.controller.js";
+import { create, getAll, remove, resolveQrToken } from "../controllers/table.controller.js";
 import { authenticate, authorize } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validate.js";
 import { createTableSchema } from "../validations/restaurant.schema.js";
 
 const router = Router();
+
+// ── Public — hit directly after a QR scan, before any auth ─────────
+// GET /api/v1/tables/qr/:qrToken
+router.get("/qr/:qrToken", resolveQrToken);
 
 router.use(authenticate);
 

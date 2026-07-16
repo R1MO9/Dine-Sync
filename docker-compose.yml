@@ -186,7 +186,7 @@ services:
     # order-service/kitchen-queue-service/payment-service/inventory-service/
     # notification-service all connect to this via KAFKA_BROKERS=kafka:9092.
     kafka:
-        image: bitnami/kafka:3.7
+        image: bitnamilegacy/kafka:3.7.1
         container_name: ds-kafka
         restart: unless-stopped
         environment:
@@ -334,6 +334,7 @@ services:
         environment:
             PORT: 8004
             NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-order:5432/order_db
             REDIS_HOST: redis
             REDIS_PORT: 6379
             KAFKA_BROKERS: kafka:9092
@@ -364,6 +365,7 @@ services:
         environment:
             PORT: 8005
             NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-kitchen:5432/kitchen_queue_db
             KAFKA_BROKERS: kafka:9092
         ports:
             - "8005:8005"
@@ -390,6 +392,7 @@ services:
         environment:
             PORT: 8006
             NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-payment:5432/payment_db
             KAFKA_BROKERS: kafka:9092
         ports:
             - "8006:8006"
@@ -416,6 +419,7 @@ services:
         environment:
             PORT: 8007
             NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-inventory:5432/inventory_db
             KAFKA_BROKERS: kafka:9092
         ports:
             - "8007:8007"
@@ -442,6 +446,7 @@ services:
         environment:
             PORT: 8008
             NODE_ENV: development
+            DATABASE_URL: postgresql://${POSTGRES_USER:-dinesync}:${POSTGRES_PASSWORD:-secret}@postgres-notification:5432/notification_db
             KAFKA_BROKERS: kafka:9092
         ports:
             - "8008:8008"

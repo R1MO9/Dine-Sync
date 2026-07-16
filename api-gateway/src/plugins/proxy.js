@@ -1,4 +1,4 @@
-import { createProxyMiddleware } from "http-proxy-middleware";
+import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import logger from "../utils/logger.js";
 
 /**
@@ -11,6 +11,13 @@ const createProxy = (target, options = {}) => {
     return createProxyMiddleware({
         target,
         changeOrigin: true,
+
+        // Downstream services mount their routes under the full "/api/v1/..."
+        // prefix, but Express strips that prefix from req.url before this
+        // middleware sees it (it's mounted via app.use(path, ...)). Restore
+        // the original full path so e.g. /api/v1/auth/register isn't sent
+        // upstream as bare /register.
+        pathRewrite: (path, req) => req.originalUrl,
 
         // Forward user context to downstream services via headers
         on: {
@@ -36,6 +43,10 @@ const createProxy = (target, options = {}) => {
                     method: req.method,
                     requestId: req.requestId,
                 });
+
+                // express.json() upstream already consumed the request stream —
+                // re-serialize the parsed body onto the outgoing proxied request.
+                fixRequestBody(proxyReq, req);
             },
 
             error: (err, req, res) => {

@@ -166,22 +166,26 @@ export const getUserById = async (userId) => {
     return user;
 };
 
-// ── Internal: Link Owner Restaurant ───────────────────────────────
+// ── Internal: Link Restaurant to Owner/Staff ──────────────────────
+// Used both when an owner creates a restaurant and when a staff invite is
+// accepted (see restaurant-service's staff.service.js) — any non-customer
+// role can be linked to a restaurant, since that's what scopes their JWT's
+// restaurantId claim for every downstream service.
 export const linkRestaurantToOwner = async (userId, restaurantId) => {
     const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, role: true, restaurantId: true },
     });
 
-    if (!user || user.role !== "owner") {
-        const err = new Error("Owner user not found");
+    if (!user || user.role === "customer") {
+        const err = new Error("User not found");
         err.statusCode = 404;
-        err.code = "OWNER_NOT_FOUND";
+        err.code = "USER_NOT_FOUND";
         throw err;
     }
 
     if (user.restaurantId && user.restaurantId !== restaurantId) {
-        const err = new Error("Owner is already linked to a different restaurant");
+        const err = new Error("User is already linked to a different restaurant");
         err.statusCode = 409;
         err.code = "RESTAURANT_ALREADY_LINKED";
         throw err;
